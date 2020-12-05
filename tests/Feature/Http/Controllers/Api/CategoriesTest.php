@@ -4,129 +4,159 @@ namespace Tests\Feature\Http\Controllers\Api;
 
 use App\Models\Category;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
-use Illuminate\Support\Facades\Lang;
 use Tests\TestCase;
+use Tests\Traits\TestSaves;
+use Tests\Traits\TestValidations;
 
 class CategoriesTest extends TestCase {
 
-    use DatabaseMigrations;
+    use DatabaseMigrations, TestValidations, TestSaves;
+
+    private $category;
+
+    protected function setUp(): void {
+        parent::setUp();
+        $this->category = factory(Category::class)->create();
+    }
 
     /** @test  */
     public function list_all_categories() {
 
-        $categories = factory(Category::class, 100)->create();
-
         $this
-            ->get('/api/categories', $this->headers)
+            ->json('GET', '/api/categories')
             ->assertStatus(200)
-            ->assertJson([
-                [
-                    'id' => $categories->first()->id
-                ]
-            ])
-            ->assertJsonCount(100);
+            ->assertJson([$this->category->toArray()])
+            ->assertJsonCount(1);
     }
 
     /** @test  */
     public function can_retrieve_one_category_to_show() {
-        $category = factory(Category::class)->create();
-
         $this
-            ->get(route('categories.show', ['category' => $category->id]), $this->headers)
+            ->json('GET', route('categories.show', ['category' => $this->category->id]))
             ->assertStatus(200)
-            ->assertJson($category->toArray());
+            ->assertJson($this->category->toArray());
     }
 
-    /** @test  */
-    public function validation_to_add_new_category() {
-        $this->post('/api/categories', [], $this->headers)
-            ->assertStatus(422)
-            ->assertJsonFragment(
-                [Lang::get('validation.required', ['attribute' => 'name'])]
-            )
-            ->assertJsonMissingValidationErrors(['is_active'])
-            ->assertJsonValidationErrors(
-                ["name"]
-            );
-
-        $this->json('POST', route('categories.store'), [
-            'name' => str_repeat('a', 256),
-            'is_active' => 'aasdf'
-        ])->assertStatus(422)
-            ->assertJsonValidationErrors(['name', 'is_active'])
-            ->assertJsonFragment([
-                Lang::get('validation.max.string', ['attribute' => 'name', 'max' => 255])
-            ])
-            ->assertJsonFragment([
-                Lang::get('validation.boolean', ['attribute' => 'is active'])
-            ]);
-
-        $this->assertCount(0, Category::all());
+    /**
+     * @test
+     * @dataProvider validationFieldsProvider
+     * @param $dataProvider
+     */
+    public function validation_to_add_new_category($dataProvider) {
+        $this->assertInvalidationInStoreAction($dataProvider['data'], $dataProvider['rule'], $dataProvider['ruleParams']);
     }
 
-    /** @test  */
-    public function can_add_new_category() {
-        $data = [
-            'name' => 'Category 1',
-            'description' => 'Category description'
-        ];
-
-        $response = $this->post('/api/categories', $data, $this->headers)
-            ->assertStatus(201)
-            ->assertJsonFragment(
-                $data
-            );
-
-        $this->assertTrue($response->json(['is_active']));
-        $this->assertCount(1, Category::all());
-
-        $response = $this->json('POST', route('categories.store'), [
-            'name' => 'test Category',
-            'is_active' => false,
-        ])->assertStatus(201)
-            ->assertJsonFragment(
-                [
-                    'name' => 'test Category',
-                    'is_active' => false,
-                ]
-            );
-
-        $this->assertFalse($response->json('is_active'));
-        $this->assertNull($response->json('description'));
+    /**
+     * @test
+     * @dataProvider validationFieldsProvider
+     * @param $dataProvider
+     */
+    public function validation_to_update_category($dataProvider) {
+        $this->assertInvalidationInUpdateAction($dataProvider['data'], $dataProvider['rule'], $dataProvider['ruleParams']);
     }
 
-    /** @test  */
-    public function can_edit_a_category() {
-        $category = factory(Category::class)->create([
-            'is_active' => false
+    /** @test
+     * @param $dataProvider
+     * @throws \Exception
+     * @dataProvider valuesStoreProvider
+     */
+    public function can_add_new_category($dataProvider) {
+        $response = $this->assertStore($dataProvider['data'], $dataProvider['testData'], $dataProvider['jsonData']);
+        $response->assertJsonStructure([
+            'created_at', 'updated_at'
         ]);
+    }
 
-        $response = $this->put('/api/categories/'. $category->id, [
-            'name' => 'Updating category',
-            'is_active' => true,
-            'description' => ''
-        ], $this->headers)
-            ->assertStatus(200)
-            ->assertJsonFragment(
-                [
-                    'name' => 'Updating category',
-                    'id' => $category->id,
-                ]
-            );
-
-        $this->assertNull($response->json('description'));
-        $this->assertTrue($response->json('is_active'));
-        $this->assertCount(1, Category::all());
+    /**
+     * @test
+     * @param $dataProvider
+     * @throws \Exception
+     * @dataProvider valuesUpdateProvider
+     */
+    public function can_edit_a_category($dataProvider) {
+        $this->category = factory(Category::class)->create(['is_active' => false, 'description' => 'description']);
+        $response = $this->assertUpdate($dataProvider['data'], $dataProvider['testData'], $dataProvider['jsonData']);
+        $response->assertJsonStructure([
+            'created_at', 'updated_at'
+        ]);
     }
 
     /** @test  */
     public function can_delete_a_category() {
-        $category = factory(Category::class)->create();
-
-        $this->delete('/api/categories/'. $category->id, $this->headers)
+        $this->json('DELETE', route('categories.destroy', ['category' => $this->category->id]))
             ->assertStatus(204)
             ->assertNoContent();
 
         $this->assertCount(0, Category::all());
+    }
+
+    protected function routeStore() {
+        return route('categories.store');
+    }
+
+    protected function routeUpdate() {
+        return route('categories.update', ['category' => $this->category->id]);
+    }
+
+    protected function model() {
+        return Category::class;
+    }
+
+    public function validationFieldsProvider() {
+        return [
+            [['data' => ['name' => ''], 'rule' => 'required', 'ruleParams' => []]],
+            [['data' => ['name' => str_repeat('a', 256)], 'rule' => 'max.string', 'ruleParams' => ['max' => 255]]],
+            [['data' => ['is_active' => 'aasdf'], 'rule' => 'boolean', 'ruleParams' => []]],
+        ];
+    }
+
+    public function valuesStoreProvider() {
+        return [
+            [
+                [
+                    'data' => ['name' => 'Test'],
+                    'testData' => ['name' => 'Test', 'is_active' => true, 'deleted_at' => null],
+                    'jsonData' => []
+                ]
+            ],
+            [
+                [
+                    'data' => ['name' => 'Test', 'description' => 'description', 'is_active' => false],
+                    'testData' => ['name' => 'Test', 'description' => 'description', 'is_active' => false],
+                    'jsonData' => []
+                ]
+            ],
+        ];
+    }
+
+    public function valuesUpdateProvider() {
+        $data = [
+            'name' => 'Test',
+            'is_active' => true,
+            'description' => null
+        ];
+        return [
+            [
+                [
+                    'data' => $data,
+                    'testData' => $data + ['deleted_at' => null],
+                    'jsonData' => []
+                ]
+            ],
+            [
+                [
+                    'data' => array_merge($data, ['description' => 'Test']),
+                    'testData' => array_merge($data, ['description' => 'Test']),
+                    'jsonData' => []
+                ]
+            ],
+            [
+                [
+                    'data' => array_merge($data, ['description' => '']),
+                    'testData' => array_merge($data, ['description' => null]),
+                    'jsonData' => []
+                ]
+            ],
+        ];
     }
 }
