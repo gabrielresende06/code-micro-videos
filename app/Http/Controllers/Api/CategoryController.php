@@ -13,7 +13,7 @@ class CategoryController extends Controller {
     }
 
     public function store(CategoryRequest $request) {
-        return Category::create($request->validated());
+        return Category::create($request->validated())->refresh();
     }
 
     public function show(Category $category) {
