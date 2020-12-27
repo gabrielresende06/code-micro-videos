@@ -2,8 +2,14 @@
 
 namespace Tests\Feature\Http\Controllers\Api;
 
+use App\Http\Controllers\Api\GenreController;
+use App\Http\Controllers\Api\VideoController;
+use App\Models\Category;
 use App\Models\Genre;
+use App\Models\Video;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
+use Illuminate\Http\Request;
+use Tests\Exceptions\TestException;
 use Tests\TestCase;
 use Tests\Traits\TestSaves;
 use Tests\Traits\TestValidations;
@@ -22,7 +28,7 @@ class GenresTest extends TestCase {
     /** @test  */
     public function list_all_genres() {
         $this
-            ->json('GET', '/api/genres')
+            ->json('GET', route('genres.index'))
             ->assertStatus(200)
             ->assertJson([$this->genre->toArray()])
             ->assertJsonCount(1);
@@ -59,7 +65,8 @@ class GenresTest extends TestCase {
      * @dataProvider valuesStoreProvider
      */
     public function can_add_new_genre($dataProvider) {
-        $response = $this->assertStore($dataProvider['data'], $dataProvider['testData'], $dataProvider['jsonData']);
+        $categories = factory(Category::class, 2)->create();
+        $response = $this->assertStore($dataProvider['data'] + ['categories_id' => $categories->pluck('id')->toArray()], $dataProvider['testData'], $dataProvider['jsonData']);
         $response->assertJsonStructure([
             'created_at', 'updated_at'
         ]);
@@ -72,11 +79,44 @@ class GenresTest extends TestCase {
      * @dataProvider valuesUpdateProvider
      */
     public function can_edit_a_genre($dataProvider) {
+        $categories = factory(Category::class, 3)->create();
         $this->genre = factory(Genre::class)->create(['is_active' => false]);
-        $response = $this->assertUpdate($dataProvider['data'], $dataProvider['testData'], $dataProvider['jsonData']);
+        $response = $this->assertUpdate($dataProvider['data'] + ['categories_id' => $categories->pluck('id')->toArray()],
+            $dataProvider['testData'], $dataProvider['jsonData']);
         $response->assertJsonStructure([
             'created_at', 'updated_at'
         ]);
+    }
+
+    public function testRollbackStore() {
+
+        $data = [ 'name' => 'title' , 'is_active' => true];
+        $controller = \Mockery::mock(GenreController::class)
+            ->makePartial()
+            ->shouldAllowMockingProtectedMethods();
+
+        $controller->shouldReceive('validate')
+            ->once()
+            ->withAnyArgs()
+            ->andReturn($data);
+
+        $controller->shouldReceive('rulesStore')
+            ->once()
+            ->withAnyArgs()
+            ->andReturn([]);
+
+        $request = \Mockery::mock(Request::class);
+
+        $controller->shouldReceive('handleRelations')
+            ->once()
+            ->andThrow(new TestException('test'));
+
+        try {
+            $controller->store($request);
+        } catch (TestException $ex) {
+            $this->assertCount(1, Genre::all());
+        }
+
     }
 
     /** @test  */
@@ -105,6 +145,10 @@ class GenresTest extends TestCase {
             [['data' => ['name' => null], 'rule' => 'required', 'ruleParams' => []],],
             [['data' => ['name' => str_repeat('a', 256)], 'rule' => 'max.string', 'ruleParams' => ['max' => 255]],],
             [['data' => ['is_active' => 'asdf'], 'rule' => 'boolean', 'ruleParams' => []]],
+
+            [['data' => ['categories_id' => ''], 'rule' => 'required', 'ruleParams' => []]],
+
+            [['data' => ['categories_id' => 'a'], 'rule' => 'array', 'ruleParams' => []]],
         ];
     }
 

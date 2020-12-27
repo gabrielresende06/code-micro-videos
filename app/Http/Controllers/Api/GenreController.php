@@ -3,30 +3,55 @@
 namespace App\Http\Controllers\Api;
 
 use App\Models\Genre;
-use App\Http\Controllers\Controller;
-use App\Http\Requests\GenreRequest;
+use Illuminate\Http\Request;
 
-class GenreController extends Controller {
+class GenreController extends BasicCrudController {
 
-    public function index() {
-        return Genre::all();
+    private $rules = [
+        'name' => 'required|max:255',
+        'is_active' => 'boolean',
+        'categories_id' => 'required|array|exists:categories,id',
+    ];
+
+    public function store(Request $request) {
+        $validated = $this->validate($request, $this->rulesStore());
+        $self = $this;
+        $genre = \DB::transaction(function () use ($request, $validated, $self) {
+            $genre = $this->model()::create($validated);
+            $self->handleRelations($genre, $request);
+            return $genre;
+        });
+        return $genre->refresh();
     }
 
-    public function store(GenreRequest $request) {
-        return Genre::create($request->all())->refresh();
+    public function update($id, Request $request) {
+        $validated = $this->validate($request, $this->rulesUpdate());
+        $self = $this;
+
+        return \DB::transaction(function () use($id, $self, $validated, $request) {
+            /** @var Genre $genre */
+            $genre = $this->findOrFail($id);
+
+            $genre->update($validated);
+            $self->handleRelations($genre, $request);
+
+            return $genre->fresh();
+        });
     }
 
-    public function show(Genre $genre) {
-        return $genre;
+    protected function handleRelations(Genre $genre, Request $request) {
+        $genre->categories()->sync($request->get('categories_id'));
     }
 
-    public function update(GenreRequest $request, Genre $genre) {
-        $genre->update($request->all());
-        return $genre->fresh();
+    protected function model() {
+        return Genre::class;
     }
 
-    public function destroy(Genre $genre) {
-        $genre->delete();
-        return response()->noContent();
+    protected function rulesStore() {
+        return $this->rules;
+    }
+
+    protected function rulesUpdate() {
+        return $this->rules;
     }
 }
