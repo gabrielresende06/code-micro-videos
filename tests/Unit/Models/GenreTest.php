@@ -49,7 +49,7 @@ class GenreTest extends TestCase {
     }
 
     public function testCasts() {
-        $casts = ['is_active' => 'boolean'];
+        $casts = ['is_active' => 'boolean', 'id' => 'string'];
         $this->assertEquals($casts, $this->genre->getCasts());
     }
 }

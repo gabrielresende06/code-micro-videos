@@ -27,6 +27,8 @@ class VideoCrudTest extends BaseVideoTestCase {
                 'created_at',
                 'updated_at',
                 'deleted_at',
+                'video_file',
+                'thumb_file',
             ],
             $videosKeys
         );
