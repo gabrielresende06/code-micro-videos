@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Models\Unit;
+namespace Tests\Unit\Models;
 
 use App\Models\Traits\UsesUuid;
 use App\Models\Video;

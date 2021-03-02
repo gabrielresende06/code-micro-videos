@@ -3,10 +3,8 @@
 namespace Tests\Feature\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\GenreController;
-use App\Http\Controllers\Api\VideoController;
 use App\Models\Category;
 use App\Models\Genre;
-use App\Models\Video;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Http\Request;
 use Tests\Exceptions\TestException;
@@ -70,6 +68,10 @@ class GenresTest extends TestCase {
         $response->assertJsonStructure([
             'created_at', 'updated_at'
         ]);
+        $this->assertDatabaseHas('category_genre', [
+            'genre_id' => $response->json('id'),
+            'category_id' => $categories->first()->id,
+        ]);
     }
 
     /**
@@ -111,12 +113,50 @@ class GenresTest extends TestCase {
             ->once()
             ->andThrow(new TestException('test'));
 
+        $hasThrewException = false;
         try {
             $controller->store($request);
         } catch (TestException $ex) {
             $this->assertCount(1, Genre::all());
+            $hasThrewException = true;
         }
 
+        $this->assertTrue($hasThrewException);
+    }
+
+
+    public function testRollbackUpdate() {
+
+        $data = [ 'name' => 'title' , 'is_active' => true];
+        $controller = \Mockery::mock(GenreController::class)
+            ->makePartial()
+            ->shouldAllowMockingProtectedMethods();
+
+        $controller->shouldReceive('validate')
+            ->once()
+            ->withAnyArgs()
+            ->andReturn($data);
+
+        $controller->shouldReceive('rulesUpdate')
+            ->once()
+            ->withAnyArgs()
+            ->andReturn([]);
+
+        $request = \Mockery::mock(Request::class);
+
+        $controller->shouldReceive('handleRelations')
+            ->once()
+            ->andThrow(new TestException('test'));
+
+        $hasThrewException = false;
+        try {
+            $controller->update($this->genre->id ,$request);
+        } catch (TestException $ex) {
+            $this->assertCount(1, Genre::all());
+            $hasThrewException = true;
+        }
+
+        $this->assertTrue($hasThrewException);
     }
 
     /** @test  */
