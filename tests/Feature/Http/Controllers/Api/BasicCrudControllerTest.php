@@ -5,12 +5,16 @@ namespace Tests\Feature\Http\Controllers\Api;
 use App\Http\Controllers\Api\BasicCrudController;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\ResourceCollection;
 use Tests\Stubs\Controllers\CategoryControllerStub;
 use Tests\Stubs\Models\CategoryStub;
+use Tests\Stubs\Resources\CategoryResourceStub;
 use Tests\TestCase;
+use Tests\Traits\TestResources;
 
 class BasicCrudControllerTest extends TestCase {
 
+    use TestResources;
     private $controller;
 
     protected function setUp(): void {
@@ -27,8 +31,9 @@ class BasicCrudControllerTest extends TestCase {
     public function testIndex() {
         /** @var CategoryStub $category */
         $category = CategoryStub::create(['name' => 'test_name', 'description' => 'test_description']);
-        $result =  $this->controller->index()->toArray();
-        $this->assertEquals([$category->toArray()], $result);
+        /** @var ResourceCollection $result */
+        $result =  $this->controller->index();
+        $this->assertEquals(['data' => [$category->toArray()]], $result->response()->getData(true));
     }
 
     public function testInvalidationDataInStore() {
@@ -49,8 +54,8 @@ class BasicCrudControllerTest extends TestCase {
             ->once()
             ->andReturn(['name' => 'test_name', 'description' => 'test_description']);
 
-        $result = $this->controller->store($request)->toArray();
-        $this->assertEquals(CategoryStub::find(1)->toArray(), $result);
+        $result = $this->controller->store($request);
+        $this->assertEquals(['data' => CategoryStub::find(1)->toArray()], $result->response()->getData(true));
     }
 
     public function testIfFindOrFailFetchModel() {
@@ -80,8 +85,8 @@ class BasicCrudControllerTest extends TestCase {
         /** @var CategoryStub $category */
         $category = CategoryStub::create(['name' => 'test_name', 'description' => 'test_description']);
 
-        $result =  $this->controller->show($category->id)->toArray();
-        $this->assertEquals($result, CategoryStub::find(1)->toArray());
+        $result =  $this->controller->show($category->id);
+        $this->assertEquals($result->response()->getData(true), ['data' => CategoryStub::find(1)->toArray()]);
     }
 
     public function testInvalidationDataInUpdate() {
@@ -108,8 +113,8 @@ class BasicCrudControllerTest extends TestCase {
             ->once()
             ->andReturn(['name' => 'test_update', 'description' => 'test_update']);
 
-        $result = $this->controller->update($category->id, $request)->toArray();
-        $this->assertEquals(CategoryStub::find(1)->toArray(), $result);
+        $result = $this->controller->update($category->id, $request);
+        $this->assertEquals(['data' => CategoryStub::find(1)->toArray()], $result->response()->getData(true));
     }
 
     public function testeDelete() {

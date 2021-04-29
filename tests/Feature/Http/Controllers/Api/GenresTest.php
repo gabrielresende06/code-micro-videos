@@ -3,20 +3,30 @@
 namespace Tests\Feature\Http\Controllers\Api;
 
 use App\Http\Controllers\Api\GenreController;
+use App\Http\Resources\GenreResource;
 use App\Models\Category;
 use App\Models\Genre;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Http\Request;
 use Tests\Exceptions\TestException;
 use Tests\TestCase;
+use Tests\Traits\TestResources;
 use Tests\Traits\TestSaves;
 use Tests\Traits\TestValidations;
 
 class GenresTest extends TestCase {
 
-    use DatabaseMigrations, TestValidations, TestSaves;
+    use DatabaseMigrations, TestValidations, TestSaves, TestResources;
 
     private $genre;
+    private $serializedFields = [
+        'id',
+        'name',
+        'is_active',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ];
 
     protected function setUp(): void {
         parent::setUp();
@@ -25,18 +35,27 @@ class GenresTest extends TestCase {
 
     /** @test  */
     public function list_all_genres() {
-        $this
+       $response = $this
             ->json('GET', route('genres.index'))
             ->assertStatus(200)
-            ->assertJson([$this->genre->toArray()])
-            ->assertJsonCount(1);
+           ->assertJson([
+               'meta' => ['per_page' => 15]
+           ])
+            ->assertJsonStructure([
+                'data' => [
+                    '*' => $this->serializedFields
+                ],
+                'meta' => [],
+                'links' => [],
+            ]);
+       $this->assertResource($response, GenreResource::collection(collect([$this->genre])));
     }
 
     /** @test */
     public function can_retrieve_one_genre_to_show() {
-        $this->json('GET', route('genres.show', ['genre' => $this->genre->id]))
-            ->assertStatus(200)
-            ->assertJson($this->genre->toArray());
+        $response = $this->json('GET', route('genres.show', ['genre' => $this->genre->id]))
+            ->assertStatus(200);
+        $this->assertResource($response, new GenreResource($this->genre));
     }
 
     /**
@@ -64,12 +83,15 @@ class GenresTest extends TestCase {
      */
     public function can_add_new_genre($dataProvider) {
         $categories = factory(Category::class, 2)->create();
-        $response = $this->assertStore($dataProvider['data'] + ['categories_id' => $categories->pluck('id')->toArray()], $dataProvider['testData'], $dataProvider['jsonData']);
-        $response->assertJsonStructure([
-            'created_at', 'updated_at'
-        ]);
+        $response = $this->assertStore(
+            $dataProvider['data'] + ['categories_id' => $categories->pluck('id')->toArray()],
+            $dataProvider['testData'], $dataProvider['jsonData']
+        );
+        $response->assertJsonStructure(['data' => $this->serializedFields]);
+
+        $this->assertResource($response, new GenreResource(Genre::find($response->json('data.id'))));
         $this->assertDatabaseHas('category_genre', [
-            'genre_id' => $response->json('id'),
+            'genre_id' => $response->json('data.id'),
             'category_id' => $categories->first()->id,
         ]);
     }
@@ -83,11 +105,12 @@ class GenresTest extends TestCase {
     public function can_edit_a_genre($dataProvider) {
         $categories = factory(Category::class, 3)->create();
         $this->genre = factory(Genre::class)->create(['is_active' => false]);
-        $response = $this->assertUpdate($dataProvider['data'] + ['categories_id' => $categories->pluck('id')->toArray()],
-            $dataProvider['testData'], $dataProvider['jsonData']);
-        $response->assertJsonStructure([
-            'created_at', 'updated_at'
-        ]);
+        $response = $this->assertUpdate(
+            $dataProvider['data'] + ['categories_id' => $categories->pluck('id')->toArray()],
+            $dataProvider['testData'], $dataProvider['jsonData']
+        );
+        $response->assertJsonStructure(['data' => $this->serializedFields]);
+        $this->assertResource($response, new GenreResource(Genre::find($response->json('data.id'))));
     }
 
     public function testRollbackStore() {

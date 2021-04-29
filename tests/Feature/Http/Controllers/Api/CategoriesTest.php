@@ -2,17 +2,28 @@
 
 namespace Tests\Feature\Http\Controllers\Api;
 
+use App\Http\Resources\CategoryResource;
 use App\Models\Category;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Tests\TestCase;
+use Tests\Traits\TestResources;
 use Tests\Traits\TestSaves;
 use Tests\Traits\TestValidations;
 
 class CategoriesTest extends TestCase {
 
-    use DatabaseMigrations, TestValidations, TestSaves;
+    use DatabaseMigrations, TestValidations, TestSaves, TestResources;
 
     private $category;
+    private $serializedFields = [
+        'id',
+        'name',
+        'description',
+        'is_active',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ];
 
     protected function setUp(): void {
         parent::setUp();
@@ -21,20 +32,28 @@ class CategoriesTest extends TestCase {
 
     /** @test  */
     public function list_all_categories() {
-
-        $this
+        $response = $this
             ->json('GET', '/api/categories')
             ->assertStatus(200)
-            ->assertJson([$this->category->toArray()])
-            ->assertJsonCount(1);
+            ->assertJson([
+                'meta' => ['per_page' => 15]
+            ])
+            ->assertJsonStructure([
+                'data' => [
+                    '*' => $this->serializedFields
+                ],
+                'meta' => [],
+                'links' => [],
+            ]);
+        $this->assertResource($response, CategoryResource::collection(collect([$this->category])));
     }
 
     /** @test  */
     public function can_retrieve_one_category_to_show() {
-        $this
+        $response = $this
             ->json('GET', route('categories.show', ['category' => $this->category->id]))
-            ->assertStatus(200)
-            ->assertJson($this->category->toArray());
+            ->assertStatus(200);
+        $this->assertResource($response, new CategoryResource($this->category));
     }
 
     /**
@@ -62,9 +81,8 @@ class CategoriesTest extends TestCase {
      */
     public function can_add_new_category($dataProvider) {
         $response = $this->assertStore($dataProvider['data'], $dataProvider['testData'], $dataProvider['jsonData']);
-        $response->assertJsonStructure([
-            'created_at', 'updated_at'
-        ]);
+        $response->assertJsonStructure(['data' => $this->serializedFields]);
+        $this->assertResource($response, new CategoryResource(Category::find($response->json('data.id'))));
     }
 
     /**
@@ -76,9 +94,8 @@ class CategoriesTest extends TestCase {
     public function can_edit_a_category($dataProvider) {
         $this->category = factory(Category::class)->create(['is_active' => false, 'description' => 'description']);
         $response = $this->assertUpdate($dataProvider['data'], $dataProvider['testData'], $dataProvider['jsonData']);
-        $response->assertJsonStructure([
-            'created_at', 'updated_at'
-        ]);
+        $response->assertJsonStructure(['data' => $this->serializedFields]);
+        $this->assertResource($response, new CategoryResource(Category::find($response->json('data.id'))));
     }
 
     /** @test  */

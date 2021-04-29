@@ -29,8 +29,19 @@ class VideoTest extends TestCase {
     }
 
     public function testFillableAttributes() {
-        $fillable = ['title', 'description', 'year_launched', 'opened', 'rating',  'duration', 'video_file', 'thumb_file'];
-        $this->assertEquals($fillable, $this->video->getFillable());
+        $fillable = [
+            'title',
+            'description',
+            'year_launched',
+            'opened',
+            'rating',
+            'duration',
+            'video_file',
+            'thumb_file',
+            'banner_file',
+            'trailer_file'
+        ];
+        $this->assertEqualsCanonicalizing($fillable, $this->video->getFillable());
     }
 
     public function testKeyType() {

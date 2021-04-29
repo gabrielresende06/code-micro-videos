@@ -32,15 +32,22 @@ trait TestUploads {
         ];
 
         foreach ($routes as $route) {
-            $file = UploadedFile::fake()->create("$field.1$extension");
+            $file = UploadedFile::fake()->create("{$field}.1{$extension}");
             $response = $this->json($route['method'], $route['route'], [$field => $file]);
 
             $this->assertInvalidationFields($response, [$field], $rule, $rulesParams);
 
-            $file = UploadedFile::fake()->create("$field.$extension")->size($maxSize + 1);
+            $file = UploadedFile::fake()->create("{$field}.{$extension}")->size($maxSize + 1);
             $response = $this->json($route['method'], $route['route'], [$field => $file]);
 
             $this->assertInvalidationFields($response, [$field], 'max.file', ['max' => $maxSize]);
+        }
+    }
+
+    protected function assertFilesExistsInStorage($model, array $files) {
+        /** @var UploadedFile $file */
+        foreach ($files as $file) {
+            \Storage::assertExists($model->relativeFilePath($file->hashName()));
         }
     }
 }

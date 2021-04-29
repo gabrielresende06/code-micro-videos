@@ -2,23 +2,41 @@
 
 namespace Tests\Feature\Http\Controllers\Api;
 
+use App\Http\Resources\VideoResource;
 use App\Models\Category;
 use App\Models\Genre;
 use App\Models\Video;
 use Illuminate\Foundation\Testing\DatabaseMigrations;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
+use Tests\Traits\TestResources;
 use Tests\Traits\TestSaves;
 use Tests\Traits\TestUploads;
 use Tests\Traits\TestValidations;
 
 class VideoControllerTest extends TestCase {
 
-    use DatabaseMigrations, TestValidations, TestSaves, TestUploads;
+    use DatabaseMigrations, TestValidations, TestSaves, TestUploads, TestResources;
 
     private $video;
     private $categories;
     private $genres;
+    private $serializedFields = [
+        'id',
+        'title',
+        'description',
+        'year_launched',
+        'opened',
+        'rating',
+        'video_file',
+        'trailer_file',
+        'banner_file',
+        'thumb_file',
+        'duration',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+    ];
 
     protected function setUp(): void {
         parent::setUp();
@@ -30,19 +48,33 @@ class VideoControllerTest extends TestCase {
     /** @test  */
     public function index() {
 
-        $this
+        $response = $this
             ->json('GET', route('videos.index'))
             ->assertStatus(200)
-            ->assertJson([$this->video->toArray()])
-            ->assertJsonCount(1);
+            ->assertJson([
+                'meta' => ['per_page' => 15]
+            ])
+            ->assertJsonStructure([
+                'data' => [
+                    '*' => $this->serializedFields
+                ],
+                'meta' => [],
+                'links' => [],
+            ]);
+
+        $this->assertResource($response, VideoResource::collection(collect([$this->video])));
     }
 
     /** @test  */
     public function show() {
-        $this
+        $response = $this
             ->json('GET', route('videos.show', ['video' => $this->video->id]))
             ->assertStatus(200)
-            ->assertJson($this->video->toArray());
+            ->assertJsonStructure([
+                'data' => $this->serializedFields
+            ]);
+
+        $this->assertResource($response, new VideoResource($this->video));
     }
 
     /**
@@ -64,7 +96,7 @@ class VideoControllerTest extends TestCase {
     }
 
     public function testInvalidationVideoField() {
-        $this->assertInvalidationFile('video_file', 'mp4', 12, 'mimetypes', ['values' => 'video/mp4']);
+        $this->assertInvalidationFile('video_file', 'mp4', Video::VIDEO_FILE_MAX_SIZE, 'mimetypes', ['values' => 'video/mp4']);
     }
 
     /** @test
@@ -85,17 +117,16 @@ class VideoControllerTest extends TestCase {
             ],
             $dataProvider['testData'], $dataProvider['jsonData']
         );
-        $response->assertJsonStructure([
-            'created_at', 'updated_at'
-        ]);
+        $response->assertJsonStructure(['data' => $this->serializedFields]);
         $this->assertDatabaseHas('category_video', [
-            'video_id' => $response->json('id'),
+            'video_id' => $response->json('data.id'),
             'category_id' => $categories->first()->id,
         ]);
         $this->assertDatabaseHas('genre_video', [
-            'video_id' => $response->json('id'),
+            'video_id' => $response->json('data.id'),
             'genre_id' => $genres->first()->id,
         ]);
+        $this->assertResource($response, new VideoResource(Video::find($response->json('data.id'))));
     }
 
     /**
@@ -114,9 +145,8 @@ class VideoControllerTest extends TestCase {
             $dataProvider['data'] + ['genres_id' => $genres->pluck('id')->toArray(), 'categories_id' => $categories->pluck('id')->toArray()],
             $dataProvider['testData'], $dataProvider['jsonData']
         );
-        $response->assertJsonStructure([
-            'created_at', 'updated_at'
-        ]);
+        $response->assertJsonStructure(['data' => $this->serializedFields]);
+        $this->assertResource($response, new VideoResource(Video::find($response->json('data.id'))));
     }
 
     public function testStoreWithFiles() {
@@ -139,7 +169,7 @@ class VideoControllerTest extends TestCase {
 
         $response = $this->json('POST', $this->routeStore(), $data + $files);
         $response->assertStatus(201);
-        $id = $response->json('id');
+        $id = $response->json('data.id');
         foreach ($files as $file) {
             \Storage::assertExists("$id/{$file->hashName()}");
         }
@@ -166,7 +196,7 @@ class VideoControllerTest extends TestCase {
 
         $response = $this->json('PUT', $this->routeUpdate(), $data + $files);
         $response->assertStatus(200);
-        $id = $response->json('id');
+        $id = $response->json('data.id');
         foreach ($files as $file) {
             \Storage::assertExists("$id/{$file->hashName()}");
         }
