@@ -4,6 +4,7 @@ RUN apk add --no-cache shadow openssl bash mysql-client nodejs npm freetype-dev 
 RUN docker-php-ext-install pdo pdo_mysql
 RUN docker-php-ext-configure gd --with-gd --with-freetype-dir=/usr/include/ --with-jpeg-dir=/usr/include/
 RUN docker-php-ext-install -j$(nproc) gd
+RUN touch /root/.bashrc | echo "PS1= '\w\$ '" >> /root/.bashrc
 
 RUN touch /home/www-data/.bashrc | echo "PS1='\w\$ '" >> /home/www-data/.bashrc
 
