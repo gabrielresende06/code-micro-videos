@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 
 class GenreController extends BasicCrudController {
 
+    protected $paginationSize = null;
     private $rules = [
         'name' => 'required|max:255',
         'is_active' => 'boolean',
