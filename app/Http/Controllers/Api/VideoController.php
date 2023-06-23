@@ -33,6 +33,7 @@ class VideoController extends BasicCrudController {
     }
 
     public function store(Request $request) {
+    // random changes
         $this->addRuleIfGenreHasCategories($request);
         $validated = $this->validate($request, $this->rulesStore());
 
